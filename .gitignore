@@ -1,0 +1,10 @@
+.DS_Store
+tmp/
+dist/
+*.log
+*.asar
+*.zip
+.env
+__pycache__/
+*.pyc
+

@@ -1,0 +1,47 @@
+{
+  "source_app": "/Applications/Codex.app",
+  "variants": [
+    {
+      "id": "work",
+      "display_name": "Codex Work",
+      "bundle_id": "com.example.codex.work",
+      "url_scheme": "codex-work",
+      "dest_app": "/Applications/Codex Work.app",
+      "codex_home": "~/.codex-work",
+      "env": {},
+      "asar_patches": []
+    },
+    {
+      "id": "openrouter",
+      "display_name": "Codex OpenRouter Models",
+      "bundle_id": "com.example.codex.openrouter",
+      "url_scheme": "codex-openrouter",
+      "dest_app": "/Applications/Codex OpenRouter Models.app",
+      "codex_home": "~/.codex-openrouter",
+      "env_file": "~/Projects/.env",
+      "env": {
+        "CODEX_OPENROUTER_VARIANT": "1"
+      },
+      "codex_config_template": "../templates/openrouter-config.toml",
+      "openrouter": {
+        "refresh_model_catalog": true,
+        "default_model": "openrouter/pareto-code",
+        "http_referer": "https://chatgpt.com/codex-openrouter-local"
+      },
+      "asar_patches": ["openrouter_model_picker", "openrouter_model_limit_1000"],
+      "icon": {
+        "compose_badge": {
+          "base_resource_png": "icon-codex-light.png",
+          "overlay_png": "../assets/openrouter/open-router-dark.png",
+          "badge_bg": "#111111",
+          "badge_size": 360,
+          "logo_size": 280,
+          "margin": 42,
+          "radius": 82
+        },
+        "icns_targets": ["electron.icns", "app.icns", "icon.icns"],
+        "png_targets": ["icon.png", "icon-codex-light.png", "icon-codex-dark.png", "default_app/icon.png"]
+      }
+    }
+  ]
+}

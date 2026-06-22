@@ -1,159 +1,164 @@
-# Codex App Clone Kit
+# Codex Variant Kit
 
-Canonical local project for creating separate macOS Codex App clones/profiles.
+Build separate local macOS variants of the Codex desktop app from your official
+`/Applications/Codex.app` install.
 
-This is the shared home for the same class of work:
+Use it for:
 
-- one Codex app for the personal account;
-- one Codex app for a work account;
-- one Codex app wired to OpenRouter models;
-- future app/profile variants with their own `CODEX_HOME`, bundle identity,
-  settings, auth, plugin set, and recovery docs.
+- a work Codex app with its own login/session state;
+- an OpenRouter-backed Codex app with OpenRouter models in the model picker;
+- any other local profile with a separate `CODEX_HOME`, bundle id, URL scheme,
+  app icon, config, and updater behavior.
 
-The original app remains:
+The official app stays untouched. Variants are rebuilt from the current
+official app and then re-signed ad-hoc.
 
-```text
-/Applications/Codex.app
-/Users/max/.codex
+## What This Does
+
+For each variant, the kit can:
+
+1. copy `/Applications/Codex.app` to a new `.app`;
+2. set a unique app name, bundle id, URL scheme, and Chromium profile name;
+3. install a wrapper that exports a variant-specific `CODEX_HOME`;
+4. optionally source an env file, such as `OPENROUTER_API_KEY`;
+5. write a Codex config template;
+6. patch `app.asar` for OpenRouter model visibility and model list limits;
+7. disable the embedded Sparkle updater in the clone;
+8. generate and install variant icons;
+9. sign, register, and verify the clone.
+
+## Requirements
+
+- macOS
+- official `Codex.app` installed in `/Applications`
+- Python 3
+- Node.js with `npx`
+- Xcode command line tools for `sips`, `iconutil`, `codesign`, and `PlistBuddy`
+- Pillow when using composed badge icons:
+
+```zsh
+python3 -m pip install --user pillow
 ```
 
-Each clone should have its own:
+OpenRouter variants also need an OpenRouter API key in an env file:
 
-- app bundle in `/Applications`;
-- `CFBundleIdentifier`;
-- display name;
-- URL scheme;
-- Chromium app data under `~/Library/Application Support/<Display Name>`;
-- `CODEX_HOME`;
-- rebuild script;
-- verify script;
-- variant documentation.
-
-## Current Variants
-
-### OpenRouter Models
-
-Purpose: a Codex clone backed by OpenRouter models through a custom model
-provider and `model_catalog_json`.
-
-```bash
-cd /Users/max/Projects/codex-app-clone-kit
-./scripts/rebuild-openrouter.zsh --replace
-./scripts/verify-openrouter.zsh
-open -a "/Applications/Codex OpenRouter Models.app"
+```zsh
+mkdir -p ~/Projects
+printf 'OPENROUTER_API_KEY=<your-openrouter-api-key>\\n' > ~/Projects/.env
+chmod 600 ~/Projects/.env
 ```
 
-Docs:
+Do not commit `.env` or local config files containing private paths or secrets.
 
-- [OpenRouter variant](docs/variants/openrouter.md)
-- [OpenRouter recovery prompt](docs/RECOVERY_PROMPT_OPENROUTER.md)
+## Quickstart
 
-Current paths:
+Clone this repo, copy the example config, and edit bundle ids before using it:
 
-```text
-App:        /Applications/Codex OpenRouter Models.app
-CODEX_HOME: /Users/max/.codex-openrouter
-Env:        /Users/max/Projects/.env, OPENROUTER_API_KEY
+```zsh
+git clone https://github.com/Xopoko/codex-app-clone-kit.git
+cd codex-app-clone-kit
+cp configs/example.variants.json configs/my.variants.json
+$EDITOR configs/my.variants.json
 ```
 
-### Work Account
+Build one variant:
 
-Purpose: a Codex clone for the work ChatGPT/Codex account, with separate OAuth
-auth/session state from the personal Codex app.
-
-```bash
-cd /Users/max/Projects/codex-app-clone-kit
-./scripts/rebuild-work-account.zsh --replace
-./scripts/verify-work-account.zsh
-open -a "/Applications/Codex Work.app"
+```zsh
+bin/codex-variant build --config configs/my.variants.json --variant openrouter --replace
 ```
 
-Docs:
+Verify it:
 
-- [Work account variant](docs/variants/work-account.md)
-- [Work account recovery prompt](docs/RECOVERY_PROMPT_WORK_ACCOUNT.md)
-
-Current paths:
-
-```text
-App:        /Applications/Codex Work.app
-CODEX_HOME: /Users/max/.codex-work
-Auth:       user logs in manually with the work account
+```zsh
+bin/codex-variant verify --config configs/my.variants.json --variant openrouter
 ```
 
-## Verify All
+Open it:
 
-```bash
-cd /Users/max/Projects/codex-app-clone-kit
-./scripts/verify-all.zsh
+```zsh
+open -a "Codex OpenRouter Models"
 ```
 
-`verify-all` checks all known variants that are currently installed. It does not
-log in, mutate accounts, or rebuild apps.
+After the official Codex app updates, rebuild variants:
 
-## Adding A New Variant
-
-Use this project instead of creating another one-off clone kit.
-
-Recommended structure:
-
-```text
-docs/variants/<variant-name>.md
-docs/RECOVERY_PROMPT_<VARIANT_NAME>.md
-scripts/<variant-name>/rebuild-*.zsh
-scripts/<variant-name>/verify-*.zsh
-scripts/rebuild-<variant-name>.zsh
-scripts/verify-<variant-name>.zsh
+```zsh
+bin/codex-variant build --config configs/my.variants.json --replace
 ```
 
-Minimum implementation contract:
+## Commands
 
-1. Do not modify `/Applications/Codex.app` or `/Users/max/.codex`.
-2. Use a distinct `CODEX_HOME`.
-3. Use a distinct bundle id and display name.
-4. Do not copy auth/session/history/logs unless the variant explicitly requires
-   it and the user asked for it.
-5. Keep secrets out of docs, scripts, commits, and shell output.
-6. Add a verify script that checks the app identity, wrapper, config, auth
-   boundary, and any variant-specific patches.
-7. Document what the user must do manually, especially OAuth/login.
-
-## Common Pattern
-
-Most variants are built by:
-
-1. Copying `/Applications/Codex.app` to a new `.app`.
-2. Editing `Contents/Info.plist`:
-   - `CFBundleDisplayName`
-   - `CFBundleName`
-   - `CFBundleIdentifier`
-   - `CrProductDirName`
-   - `CFBundleURLTypes`
-3. Moving `Contents/MacOS/Codex` to `Contents/MacOS/Codex.bin`.
-4. Replacing `Contents/MacOS/Codex` with a small wrapper that exports the
-   variant `CODEX_HOME`.
-5. Seeding that `CODEX_HOME` with safe config/plugin/skill state.
-6. Applying variant-specific app or config patches.
-7. Re-signing the app:
-
-```bash
-codesign --force --deep --sign - "/Applications/<Variant>.app"
+```zsh
+bin/codex-variant list --config configs/my.variants.json
+bin/codex-variant build --config configs/my.variants.json --variant work --replace
+bin/codex-variant build --config configs/my.variants.json --variant openrouter --replace
+bin/codex-variant verify --config configs/my.variants.json --variant openrouter
+bin/codex-variant apply-icon --config configs/my.variants.json --variant openrouter
 ```
 
-8. Verifying with a variant-specific script.
+`apply-icon` updates icon resources in an already installed variant without
+rebuilding the full app.
 
-## Existing Historical Kits
+## Icon Workflow
 
-These were the first one-off kits and are now historical snapshots:
+You can use a ready 1024x1024 PNG:
 
-```text
-/Users/max/Projects/codex-openrouter-models-clone-kit
-/Users/max/Projects/codex-work-account-clone-kit
+```json
+"icon": {
+  "master_png": "~/Pictures/my-codex-work-icon.png",
+  "icns_targets": ["electron.icns", "app.icns", "icon.icns"],
+  "png_targets": ["icon-codex-dark.png"]
+}
 ```
 
-The canonical project for future work is now this directory:
+Or compose a badge from the local Codex icon at build time:
 
-```text
-/Users/max/Projects/codex-app-clone-kit
+```json
+"icon": {
+  "compose_badge": {
+    "base_resource_png": "icon-codex-light.png",
+    "overlay_png": "assets/openrouter/open-router-dark.png",
+    "badge_bg": "#111111",
+    "badge_size": 360,
+    "logo_size": 280,
+    "margin": 42,
+    "radius": 82
+  }
+}
 ```
 
+See [docs/icons.md](docs/icons.md).
+
+## OpenRouter
+
+The OpenRouter example:
+
+- writes a Codex config using `templates/openrouter-config.toml`;
+- fetches `https://openrouter.ai/api/v1/models`;
+- builds `model-catalog.json` from the installed Codex bundled model template;
+- patches the UI model filter so custom catalog entries appear;
+- raises relevant model-list limits from `100` to `1000`;
+- installs an OpenRouter badge icon.
+
+See [docs/openrouter.md](docs/openrouter.md).
+
+## Updating
+
+Because variants are modified and ad-hoc signed, the built-in updater cannot
+validate official OpenAI update packages for those variants. Update the
+official `/Applications/Codex.app` normally, then rebuild variants with this
+kit.
+
+## Legal
+
+This project is an unofficial local automation kit. It is not affiliated with
+or endorsed by OpenAI, Codex, OpenRouter, or any company whose logo you use.
+
+OpenRouter icon assets in `assets/openrouter/` are from
+[`homarr-labs/dashboard-icons`](https://github.com/homarr-labs/dashboard-icons)
+under Apache-2.0. Product names and trademarks remain the property of their
+owners.
+
+## License
+
+MIT for this kit's scripts and documentation. Third-party assets keep their own
+licenses; see their local `NOTICE.md` files.

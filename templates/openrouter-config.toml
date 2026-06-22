@@ -1,0 +1,43 @@
+model = "openrouter/pareto-code"
+model_provider = "openrouter"
+model_catalog_json = "{{MODEL_CATALOG_JSON}}"
+model_reasoning_effort = "medium"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+project_doc_max_bytes = 10485760
+personality = "pragmatic"
+suppress_unstable_features_warning = true
+check_for_update_on_startup = false
+
+[features]
+runtime_metrics = false
+memories = true
+prevent_idle_sleep = true
+default_mode_request_user_input = true
+artifact = true
+goals = true
+js_repl = false
+
+[analytics]
+enabled = false
+
+[otel]
+metrics_exporter = "none"
+trace_exporter = "none"
+
+[shell_environment_policy]
+inherit = "all"
+exclude = ["OPENROUTER_API_KEY"]
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+env_key = "OPENROUTER_API_KEY"
+env_key_instructions = "Set OPENROUTER_API_KEY in {{ENV_FILE}}"
+wire_api = "responses"
+supports_websockets = false
+stream_idle_timeout_ms = 300000
+http_headers = { "HTTP-Referer" = "https://chatgpt.com/codex-openrouter-local", "X-Title" = "{{APP_NAME}}" }
+
+[projects."~"]
+trust_level = "trusted"

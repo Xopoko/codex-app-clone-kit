@@ -1,19 +1,22 @@
-# Recovery prompt
+# Work Variant Recovery Prompt
 
 ```text
-Прочитай /Users/max/Projects/codex-app-clone-kit/README.md и
-восстанови мне отдельный Codex Work app.
+Use this repository to rebuild my local work Codex variant.
 
-Требования:
-- основной /Applications/Codex.app не трогать;
-- персональный /Users/max/.codex не менять;
-- целевой app: /Applications/Codex Work.app;
-- целевой CODEX_HOME: /Users/max/.codex-work;
-- скопировать стартовые config/plugins/skills из персонального профиля;
-- не копировать auth.json, sessions, history, logs, sqlite-state, memories;
-- не переносить inline personal MCP API keys в work config;
-- после сборки проверить codesign, Info.plist identity, wrapper, work config и login status.
-
-После этого я сам войду рабочим аккаунтом через обычный Codex login/OAuth.
+1. Read README.md and docs/configuration.md.
+2. Use my local config if I provide one; otherwise copy
+   configs/example.variants.json to configs/work.local.json and edit:
+   - display_name
+   - bundle_id
+   - url_scheme
+   - dest_app
+   - codex_home
+   - optional icon recipe
+3. Do not copy personal auth/session/history files.
+4. Build:
+   bin/codex-variant build --config configs/work.local.json --variant work --replace
+5. Verify:
+   bin/codex-variant verify --config configs/work.local.json --variant work
+6. Report the installed app path, CODEX_HOME, and remind me to log in with the
+   intended account on first launch.
 ```
-

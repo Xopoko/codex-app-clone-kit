@@ -7,4 +7,5 @@ dist/
 .env
 __pycache__/
 *.pyc
-
+configs/*.local.json
+configs/local*.json

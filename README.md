@@ -1,5 +1,7 @@
 # Codex Variant Kit
 
+![Codex Variant Kit app variants](assets/readme/hero.png)
+
 Build separate local macOS variants of the Codex desktop app from your official
 `/Applications/Codex.app` install.
 

@@ -38,7 +38,3 @@ What happens during build:
 6. The app is signed ad-hoc and registered with LaunchServices.
 
 The script does not print the API key.
-
-The generated config excludes `OPENROUTER_API_KEY` from shell environment
-policy so it is available to the model provider but not intentionally forwarded
-into command shells.

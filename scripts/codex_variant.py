@@ -350,6 +350,41 @@ def first_match(root: Path, pattern: str) -> Path:
     return matches[0]
 
 
+def try_patch_js_asset_once(
+    root: Path,
+    *,
+    glob_pattern: str = "*.js",
+    marker: str,
+    replacements: list[tuple[str, str]],
+    required_marker: str,
+) -> bool:
+    matches = [path for path in root.glob(glob_pattern) if marker in path.read_text(encoding="utf-8")]
+    if not matches:
+        return False
+    if len(matches) != 1:
+        fail(f"expected one JS asset containing {marker!r} under {root}, found {len(matches)}")
+    patch_file_once(matches[0], replacements, required_marker)
+    return True
+
+
+def patch_js_asset_once(
+    root: Path,
+    *,
+    glob_pattern: str = "*.js",
+    marker: str,
+    replacements: list[tuple[str, str]],
+    required_marker: str,
+) -> None:
+    if not try_patch_js_asset_once(
+        root,
+        glob_pattern=glob_pattern,
+        marker=marker,
+        replacements=replacements,
+        required_marker=required_marker,
+    ):
+        fail(f"expected one JS asset containing {marker!r} under {root}, found 0")
+
+
 def patch_asar(app: Path, variant: dict[str, Any], tmp_root: Path) -> None:
     asar = app / "Contents/Resources/app.asar"
     plist = app / "Contents/Info.plist"
@@ -362,21 +397,49 @@ def patch_asar(app: Path, variant: dict[str, Any], tmp_root: Path) -> None:
     patches = set(variant.get("asar_patches") or [])
     assets = unpacked / "webview/assets"
     if "openrouter_model_picker" in patches:
-        patch_file_once(
-            first_match(assets, "model-list-filter-*.js"),
-            [
+        if not try_patch_js_asset_once(
+            assets,
+            glob_pattern="model-list-filter-*.js",
+            marker="s=i&&e!==`amazonBedrock`",
+            replacements=[
                 ("let a=[],o=null,s=i&&e!==`amazonBedrock`;", "let a=[],o=null,s=!1;"),
                 ("s=i&&e!==`amazonBedrock`", "s=!1"),
             ],
-            "s=!1",
-        )
+            required_marker="s=!1",
+        ):
+            patch_js_asset_once(
+                assets,
+                marker="l=o&&e!==`amazonBedrock`",
+                replacements=[("l=o&&e!==`amazonBedrock`", "l=!1")],
+                required_marker="l=!1",
+            )
     if "openrouter_model_limit_1000" in patches:
-        patch_file_once(first_match(assets, "model-queries-*.js"), [("var w=100,T=", "var w=1000,T=")], "var w=1000")
-        patch_file_once(
-            first_match(assets, "read-service-tier-for-request-*.js"),
-            [("limit:100})", "limit:1000})"), ("limit:100,", "limit:1000,")],
-            "limit:1000",
-        )
+        if not try_patch_js_asset_once(
+            assets,
+            glob_pattern="model-queries-*.js",
+            marker="var w=100,T=",
+            replacements=[("var w=100,T=", "var w=1000,T=")],
+            required_marker="var w=1000",
+        ):
+            patch_js_asset_once(
+                assets,
+                marker="on=100,sn=[`models`,`list`]",
+                replacements=[("on=100,sn=[`models`,`list`]", "on=1000,sn=[`models`,`list`]")],
+                required_marker="on=1000",
+            )
+        if not try_patch_js_asset_once(
+            assets,
+            glob_pattern="read-service-tier-for-request-*.js",
+            marker="limit:100",
+            replacements=[("limit:100})", "limit:1000})"), ("limit:100,", "limit:1000,")],
+            required_marker="limit:1000",
+        ):
+            patch_js_asset_once(
+                assets,
+                marker="Failed to read service tier model",
+                replacements=[("includeHidden:!0,cursor:null,limit:100})", "includeHidden:!0,cursor:null,limit:1000})")],
+                required_marker="limit:1000",
+            )
 
     asar.unlink()
     run(["npx", "--yes", "@electron/asar", "pack", str(unpacked), str(asar)])
@@ -631,12 +694,27 @@ def verify_variant(config: dict[str, Any], variant: dict[str, Any], base_dir: Pa
             fail("embedded Sparkle feed is still enabled")
         patches = set(variant.get("asar_patches") or [])
         assets = unpacked / "webview/assets"
-        if "openrouter_model_picker" in patches and "s=!1" not in first_match(assets, "model-list-filter-*.js").read_text(encoding="utf-8"):
-            fail("OpenRouter model picker patch missing")
+        if "openrouter_model_picker" in patches:
+            picker_patched = any(
+                marker in path.read_text(encoding="utf-8")
+                for marker in ("s=!1", "l=!1")
+                for path in assets.glob("*.js")
+            )
+            if not picker_patched:
+                fail("OpenRouter model picker patch missing")
         if "openrouter_model_limit_1000" in patches:
-            if "var w=1000" not in first_match(assets, "model-queries-*.js").read_text(encoding="utf-8"):
+            model_limit_patched = any(
+                marker in path.read_text(encoding="utf-8")
+                for marker in ("var w=1000", "on=1000,sn=[`models`,`list`]")
+                for path in assets.glob("*.js")
+            )
+            if not model_limit_patched:
                 fail("OpenRouter model query limit patch missing")
-            if "limit:1000" not in first_match(assets, "read-service-tier-for-request-*.js").read_text(encoding="utf-8"):
+            service_tier_patched = any(
+                "Failed to read service tier model" in data and "limit:1000" in data
+                for data in (path.read_text(encoding="utf-8") for path in assets.glob("*.js"))
+            )
+            if not service_tier_patched:
                 fail("OpenRouter service-tier limit patch missing")
 
     print(f"Verified {variant['display_name']} at {app}")

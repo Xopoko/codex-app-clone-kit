@@ -132,6 +132,11 @@ def quit_if_running(dest_app: Path, bundle_id: str, display_name: str, *, timeou
 def write_launcher(app: Path, variant: dict[str, Any], codex_home: Path, env_file: Path | None) -> None:
     launcher = app / "Contents/MacOS/Codex"
     real_binary = app / "Contents/MacOS/Codex.bin"
+    user_data_dir = expand_path(
+        variant.get("user_data_dir") or (Path.home() / "Library/Application Support" / variant["display_name"]),
+        base_dir=Path.cwd(),
+    )
+    assert user_data_dir is not None
     if not launcher.exists():
         fail(f"source launcher missing: {launcher}")
     if real_binary.exists():
@@ -155,6 +160,7 @@ def write_launcher(app: Path, variant: dict[str, Any], codex_home: Path, env_fil
     for key, value in (variant.get("env") or {}).items():
         env_lines.append(f'export {key}="{value}"')
     env_lines.append(f'export CODEX_HOME="{codex_home}"')
+    env_lines.append(f'CHROMIUM_USER_DATA_DIR="{user_data_dir}"')
 
     content = "\n".join(
         [
@@ -162,7 +168,18 @@ def write_launcher(app: Path, variant: dict[str, Any], codex_home: Path, env_fil
             "set -euo pipefail",
             "",
             *env_lines,
-            'exec "$(dirname "$0")/Codex.bin" "$@"',
+            "has_user_data_dir=0",
+            'for arg in "$@"; do',
+            '  case "$arg" in',
+            "    --user-data-dir|--user-data-dir=*) has_user_data_dir=1 ;;",
+            "  esac",
+            "done",
+            "",
+            'if [[ "$has_user_data_dir" == "1" ]]; then',
+            '  exec "$(dirname "$0")/Codex.bin" "$@"',
+            "else",
+            '  exec "$(dirname "$0")/Codex.bin" --user-data-dir="$CHROMIUM_USER_DATA_DIR" "$@"',
+            "fi",
             "",
         ]
     )

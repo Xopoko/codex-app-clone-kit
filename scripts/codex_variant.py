@@ -438,12 +438,18 @@ def patch_asar(app: Path, variant: dict[str, Any], tmp_root: Path) -> None:
             replacements=[("var w=100,T=", "var w=1000,T=")],
             required_marker="var w=1000",
         ):
-            patch_js_asset_once(
+            if not try_patch_js_asset_once(
                 assets,
                 marker="on=100,sn=[`models`,`list`]",
                 replacements=[("on=100,sn=[`models`,`list`]", "on=1000,sn=[`models`,`list`]")],
                 required_marker="on=1000",
-            )
+            ):
+                patch_js_asset_once(
+                    assets,
+                    marker="$t=100,en=[`models`,`list`]",
+                    replacements=[("$t=100,en=[`models`,`list`]", "$t=1000,en=[`models`,`list`]")],
+                    required_marker="$t=1000",
+                )
         if not try_patch_js_asset_once(
             assets,
             glob_pattern="read-service-tier-for-request-*.js",
@@ -722,7 +728,7 @@ def verify_variant(config: dict[str, Any], variant: dict[str, Any], base_dir: Pa
         if "openrouter_model_limit_1000" in patches:
             model_limit_patched = any(
                 marker in path.read_text(encoding="utf-8")
-                for marker in ("var w=1000", "on=1000,sn=[`models`,`list`]")
+                for marker in ("var w=1000", "on=1000,sn=[`models`,`list`]", "$t=1000,en=[`models`,`list`]")
                 for path in assets.glob("*.js")
             )
             if not model_limit_patched:

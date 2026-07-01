@@ -402,6 +402,31 @@ def patch_js_asset_once(
         fail(f"expected one JS asset containing {marker!r} under {root}, found 0")
 
 
+def patch_js_asset_regex_once(
+    root: Path,
+    *,
+    glob_pattern: str = "*.js",
+    marker: str,
+    pattern: str,
+    replacement: str,
+    required_pattern: str,
+) -> None:
+    matches: list[tuple[Path, str]] = []
+    for path in root.glob(glob_pattern):
+        data = path.read_text(encoding="utf-8")
+        if marker not in data:
+            continue
+        patched, count = re.subn(pattern, replacement, data, count=1)
+        if count:
+            matches.append((path, patched))
+    if len(matches) != 1:
+        fail(f"expected one JS asset matching {pattern!r} under {root}, found {len(matches)}")
+    path, patched = matches[0]
+    path.write_text(patched, encoding="utf-8")
+    if not re.search(required_pattern, patched):
+        fail(f"patch pattern {required_pattern!r} missing in {path}")
+
+
 def patch_asar(app: Path, variant: dict[str, Any], tmp_root: Path) -> None:
     asar = app / "Contents/Resources/app.asar"
     plist = app / "Contents/Info.plist"
@@ -450,12 +475,19 @@ def patch_asar(app: Path, variant: dict[str, Any], tmp_root: Path) -> None:
                     replacements=[("$t=100,en=[`models`,`list`]", "$t=1000,en=[`models`,`list`]")],
                     required_marker="$t=1000",
                 ):
-                    patch_js_asset_once(
+                    if not try_patch_js_asset_once(
                         assets,
                         marker="Ibe=100,Lbe=[`models`,`list`]",
                         replacements=[("Ibe=100,Lbe=[`models`,`list`]", "Ibe=1000,Lbe=[`models`,`list`]")],
                         required_marker="Ibe=1000",
-                    )
+                    ):
+                        patch_js_asset_regex_once(
+                            assets,
+                            marker="[`models`,`list`]",
+                            pattern=r"([A-Za-z_$][A-Za-z0-9_$]*)=100,([A-Za-z_$][A-Za-z0-9_$]*)=\[`models`,`list`\]",
+                            replacement=r"\1=1000,\2=[`models`,`list`]",
+                            required_pattern=r"[A-Za-z_$][A-Za-z0-9_$]*=1000,[A-Za-z_$][A-Za-z0-9_$]*=\[`models`,`list`\]",
+                        )
         if not try_patch_js_asset_once(
             assets,
             glob_pattern="read-service-tier-for-request-*.js",
@@ -733,14 +765,20 @@ def verify_variant(config: dict[str, Any], variant: dict[str, Any], base_dir: Pa
                 fail("OpenRouter model picker patch missing")
         if "openrouter_model_limit_1000" in patches:
             model_limit_patched = any(
-                marker in path.read_text(encoding="utf-8")
-                for marker in (
-                    "var w=1000",
-                    "on=1000,sn=[`models`,`list`]",
-                    "$t=1000,en=[`models`,`list`]",
-                    "Ibe=1000,Lbe=[`models`,`list`]",
+                any(
+                    marker in data
+                    for marker in (
+                        "var w=1000",
+                        "on=1000,sn=[`models`,`list`]",
+                        "$t=1000,en=[`models`,`list`]",
+                        "Ibe=1000,Lbe=[`models`,`list`]",
+                    )
                 )
-                for path in assets.glob("*.js")
+                or re.search(
+                    r"[A-Za-z_$][A-Za-z0-9_$]*=1000,[A-Za-z_$][A-Za-z0-9_$]*=\[`models`,`list`\]",
+                    data,
+                )
+                for data in (path.read_text(encoding="utf-8") for path in assets.glob("*.js"))
             )
             if not model_limit_patched:
                 fail("OpenRouter model query limit patch missing")
